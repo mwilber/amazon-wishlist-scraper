@@ -19,21 +19,51 @@ test('extracts stable ASINs, titles, and canonical product URLs', () => {
     {
       asin: 'B0AAA11111',
       title: 'Wooden Marble Run',
-      url: 'https://www.amazon.com/dp/B0AAA11111'
+      url: 'https://www.amazon.com/dp/B0AAA11111',
+      wishlistItemId: 'IEXAMPLE000001',
+      identifierType: 'asin'
     },
     {
       asin: 'B0BBB22222',
       title: 'Illustrated Space Atlas',
-      url: 'https://www.amazon.com/dp/B0BBB22222'
+      url: 'https://www.amazon.com/dp/B0BBB22222',
+      wishlistItemId: 'IEXAMPLE000002',
+      identifierType: 'asin'
     },
     {
       asin: 'B0CCC33333',
       title: null,
-      url: 'https://www.amazon.com/dp/B0CCC33333'
+      url: 'https://www.amazon.com/dp/B0CCC33333',
+      wishlistItemId: 'IEXAMPLE000003',
+      identifierType: 'asin'
     }
   ]);
   assert.equal(hasWishlistStructure(fixture), true);
   assert.equal(items.some((item) => item.asin === 'B0REC99999'), false);
+});
+
+test('uses a stable wishlist-row identity for manual and unavailable entries', () => {
+  const html = `
+    <div id="wishlist-page">
+      <ul id="g-items">
+        <li class="g-item-sortable awl-ul-keyword-item-container-desktop"
+            data-itemid="IMANUAL000001">
+          <span id="itemName_IMANUAL000001">PS1 games, Game Boy games, DVDs</span>
+          <a href="/hz/wishlist/ls/example?buyingElsewhere=1">Buying this gift elsewhere?</a>
+        </li>
+      </ul>
+      <div id="endOfListMarker"></div>
+    </div>
+  `;
+  const inspection = inspectWishlistHtml(html, { baseUrl: 'https://www.amazon.com/list' });
+  assert.equal(inspection.candidateRowCount, 1);
+  assert.deepEqual(inspection.items, [{
+    asin: 'WISHLIST_ITEM:IMANUAL000001',
+    title: 'PS1 games, Game Boy games, DVDs',
+    url: null,
+    wishlistItemId: 'IMANUAL000001',
+    identifierType: 'wishlist_item'
+  }]);
 });
 
 test('recognizes a definitive Amazon empty-list state without parsing recommendations', () => {

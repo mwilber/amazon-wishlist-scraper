@@ -1,16 +1,18 @@
 # Amazon Wish-list Monitor — Implemented Specification
 
 This private macOS utility monitors a small set of shared Amazon wish lists with
-Playwright and a persistent Chromium profile. It identifies products by ASIN,
-stores current and historical observations in SQLite, and sends one concise JSON
-message to a configured HTTP endpoint for each list that gained products.
+Playwright and a persistent Chromium profile. It identifies ordinary products by ASIN
+and manual or unavailable entries by their stable wishlist-row ID, stores current and
+historical observations in SQLite, and sends one concise JSON message to a configured
+HTTP endpoint for each list that gained items.
 
 ## Safety invariants
 
 - The first valid scan, including a verified empty list, establishes a silent baseline.
-- Historical ASINs are never announced again, including after removal and re-addition.
+- Historical item identities are never announced again, including after removal and
+  re-addition or when an existing item loses its ASIN link.
 - Sign-in, CAPTCHA, unrecognized markup, navigation errors, ambiguous empty results,
-  incomplete loading, and item-row/ASIN mismatches fail closed.
+  incomplete loading, and item-row/identity mismatches fail closed.
 - A failed scan never updates active products or creates an outbound message.
 - Product state, scan history, and a pending outbound message are committed together.
 - HTTP delivery occurs after that commit. Delivery failure does not invalidate the scan.

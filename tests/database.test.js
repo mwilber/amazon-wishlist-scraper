@@ -75,6 +75,53 @@ test('a removed and later re-added historical item is not new', (t) => {
   assert.equal(readded.outboundMessage, null);
 });
 
+test('keeps product identity when an Amazon item later loses its ASIN link', (t) => {
+  const { database, advance } = createDatabase();
+  t.after(() => database.close());
+  save(database, [{
+    ...item('B000000001', 'Available product'),
+    wishlistItemId: 'IROW000001',
+    identifierType: 'asin'
+  }]);
+  advance();
+  const changed = save(database, [{
+    asin: 'WISHLIST_ITEM:IROW000001',
+    title: 'Unavailable product label',
+    url: null,
+    wishlistItemId: 'IROW000001',
+    identifierType: 'wishlist_item'
+  }]);
+  assert.deepEqual(changed.comparison.newItems, []);
+  assert.equal(changed.outboundMessage, null);
+  assert.deepEqual(database.getListState(list.id).activeItems.map((entry) => ({ ...entry })), [{
+    asin: 'B000000001',
+    title: 'Unavailable product label',
+    url: 'https://www.amazon.com/dp/B000000001',
+    wishlistItemId: 'IROW000001',
+    identifierType: 'asin'
+  }]);
+});
+
+test('tracks a new manual entry once using its visible label', (t) => {
+  const { database, advance } = createDatabase();
+  t.after(() => database.close());
+  save(database, [item('B000000001')]);
+  const manualItem = {
+    asin: 'WISHLIST_ITEM:IMANUAL000001',
+    title: 'A manually entered gift',
+    url: null,
+    wishlistItemId: 'IMANUAL000001',
+    identifierType: 'wishlist_item'
+  };
+  advance();
+  const changed = save(database, [item('B000000001'), manualItem]);
+  assert.deepEqual(changed.comparison.newItems, [manualItem]);
+  assert.match(changed.outboundMessage.message, /A manually entered gift/);
+  advance();
+  const unchanged = save(database, [item('B000000001'), manualItem]);
+  assert.equal(unchanged.outboundMessage, null);
+});
+
 test('records scan failures without changing product activity', (t) => {
   const { database } = createDatabase();
   t.after(() => database.close());

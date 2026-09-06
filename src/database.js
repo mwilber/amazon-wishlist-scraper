@@ -71,6 +71,15 @@ const MIGRATIONS = [
       ALTER TABLE outbound_messages ADD COLUMN title TEXT;
       ALTER TABLE outbound_messages ADD COLUMN kind TEXT NOT NULL DEFAULT 'item_added';
     `
+  },
+  {
+    version: 3,
+    sql: `
+      ALTER TABLE products ADD COLUMN wishlist_item_id TEXT;
+      ALTER TABLE products ADD COLUMN identifier_type TEXT NOT NULL DEFAULT 'asin';
+      CREATE INDEX IF NOT EXISTS idx_products_wishlist_item_id
+        ON products(list_id, wishlist_item_id);
+    `
   }
 ];
 
@@ -149,11 +158,17 @@ export class WishlistDatabase {
     try {
       const list = this.db.prepare('SELECT * FROM lists WHERE id = ?').get(listId) || null;
       const activeItems = this.db.prepare(`
-        SELECT asin, title, url FROM products
+        SELECT asin, title, url,
+               wishlist_item_id AS wishlistItemId,
+               identifier_type AS identifierType
+        FROM products
         WHERE list_id = ? AND is_active = 1 ORDER BY asin
       `).all(listId);
       const historicalItems = this.db.prepare(`
-        SELECT asin, title, url, is_active FROM products
+        SELECT asin, title, url, is_active,
+               wishlist_item_id AS wishlistItemId,
+               identifier_type AS identifierType
+        FROM products
         WHERE list_id = ? ORDER BY asin
       `).all(listId);
       return { list, activeItems, historicalItems };
@@ -169,8 +184,25 @@ export class WishlistDatabase {
         this.upsertList(list, completedAt);
         const state = this.getListState(list.id);
         const isBaseline = !state.list?.baseline_established_at;
+        const historicalByWishlistItemId = new Map(
+          state.historicalItems
+            .filter((item) => item.wishlistItemId)
+            .map((item) => [item.wishlistItemId, item])
+        );
+        const reconciledItems = items.map((item) => {
+          const prior = item.wishlistItemId
+            ? historicalByWishlistItemId.get(item.wishlistItemId.toUpperCase())
+            : null;
+          if (!prior || prior.asin === item.asin.toUpperCase()) return item;
+          return {
+            ...item,
+            asin: prior.asin,
+            identifierType: prior.identifierType,
+            url: item.url || prior.url
+          };
+        });
         const comparison = compareItems({
-          currentItems: items,
+          currentItems: reconciledItems,
           activeItems: state.activeItems,
           historicalItems: state.historicalItems
         });
@@ -191,17 +223,21 @@ export class WishlistDatabase {
         this.db.prepare('UPDATE products SET is_active = 0 WHERE list_id = ?').run(list.id);
         const upsertProduct = this.db.prepare(`
           INSERT INTO products(
-            list_id, asin, title, url, first_seen_at, last_seen_at, is_active
-          ) VALUES (?, ?, ?, ?, ?, ?, 1)
+            list_id, asin, title, url, first_seen_at, last_seen_at, is_active,
+            wishlist_item_id, identifier_type
+          ) VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)
           ON CONFLICT(list_id, asin) DO UPDATE SET
             title = COALESCE(excluded.title, products.title),
             url = COALESCE(excluded.url, products.url),
             last_seen_at = excluded.last_seen_at,
-            is_active = 1
+            is_active = 1,
+            wishlist_item_id = COALESCE(excluded.wishlist_item_id, products.wishlist_item_id),
+            identifier_type = excluded.identifier_type
         `);
         for (const item of comparison.currentItems) {
           upsertProduct.run(
-            list.id, item.asin, item.title, item.url, completedAt, completedAt
+            list.id, item.asin, item.title, item.url, completedAt, completedAt,
+            item.wishlistItemId, item.identifierType
           );
         }
 

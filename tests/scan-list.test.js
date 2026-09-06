@@ -61,7 +61,7 @@ test('rejects non-empty results without a completed-list marker', async () => {
   }), SuspiciousResultError);
 });
 
-test('rejects item rows that cannot all be mapped to unique ASINs', async () => {
+test('rejects item rows that cannot all be mapped to unique identities', async () => {
   await assert.rejects(scanWishlistPage({
     page: pageFor({
       html: '<html><div id="wishlist-page"><ul id="g-items"><li class="g-item-sortable" data-itemid="ONE"><h2><a href="/dp/B000000001">Item</a></h2></li><li class="g-item-sortable" data-itemid="TWO">Changed markup</li></ul><div id="endOfListMarker"></div></div></html>'
@@ -69,6 +69,21 @@ test('rejects item rows that cannot all be mapped to unique ASINs', async () => 
     list,
     timeoutMs: 1_000
   }), PageStructureError);
+});
+
+test('accepts labeled manual entries without product links', async () => {
+  const result = await scanWishlistPage({
+    page: pageFor({
+      html: '<html><div id="wishlist-page"><ul id="g-items"><li class="g-item-sortable" data-itemid="IPRODUCT00001"><span id="itemName_IPRODUCT00001"><a href="/dp/B000000001">Product</a></span></li><li class="g-item-sortable awl-ul-keyword-item-container-desktop" data-itemid="IMANUAL000001"><span id="itemName_IMANUAL000001">A manually entered gift</span><a href="?buyingElsewhere=1">Buying this gift elsewhere?</a></li></ul><div id="endOfListMarker"></div></div></html>'
+    }),
+    list,
+    timeoutMs: 1_000
+  });
+  assert.equal(result.inspection.candidateRowCount, 2);
+  assert.deepEqual(result.items.map((item) => item.asin), [
+    'B000000001',
+    'WISHLIST_ITEM:IMANUAL000001'
+  ]);
 });
 
 test('rejects contradictory empty and populated markers', async () => {

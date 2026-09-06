@@ -28,4 +28,12 @@ export async function settleWishlistPage(page, timeoutMs) {
     previousHeight = height;
   }
   await page.evaluate(() => window.scrollTo(0, 0));
+
+  // Amazon can attach its completion marker shortly after the final lazy-loaded
+  // item row. Give that marker (or a definitive empty state) a bounded chance
+  // to arrive before the page-contract checks run.
+  await page.waitForSelector(
+    '#endOfListMarker, #no-items-section, .wl-list-empty, [data-testid="empty-list"]',
+    { timeout: Math.min(timeoutMs, 5_000), state: 'attached' }
+  ).catch(() => {});
 }

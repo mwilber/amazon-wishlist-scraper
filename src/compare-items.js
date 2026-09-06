@@ -1,8 +1,11 @@
 export function normalizeItem(item) {
+  const asin = String(item.asin).trim().toUpperCase();
   return {
-    asin: String(item.asin).trim().toUpperCase(),
+    asin,
     title: item.title?.trim() || null,
-    url: item.url?.trim() || null
+    url: item.url?.trim() || null,
+    wishlistItemId: item.wishlistItemId?.trim().toUpperCase() || null,
+    identifierType: item.identifierType || (asin.startsWith('WISHLIST_ITEM:') ? 'wishlist_item' : 'asin')
   };
 }
 

@@ -1,6 +1,7 @@
 import * as cheerio from 'cheerio';
 
 const ASIN_PATTERN = /^[A-Z0-9]{10}$/i;
+const WISHLIST_ITEM_ID_PATTERN = /^[A-Z0-9]{6,64}$/i;
 const PRODUCT_PATH_PATTERN = /\/(?:dp|gp\/product)\/([A-Z0-9]{10})(?:[/?#]|$)/i;
 
 function cleanText(value) {
@@ -22,6 +23,11 @@ function asinFromElement($, element) {
     if (match && !found) found = match[1].toUpperCase();
   });
   return found;
+}
+
+function wishlistItemIdFromElement($, element) {
+  const candidate = cleanText($(element).attr('data-itemid'));
+  return candidate && WISHLIST_ITEM_ID_PATTERN.test(candidate) ? candidate.toUpperCase() : null;
 }
 
 function titleFromElement($, element, asin) {
@@ -74,21 +80,28 @@ export function parseWishlistHtml(html, { baseUrl = 'https://www.amazon.com/' } 
 
   const items = new Map();
   for (const element of candidates) {
-    const asin = asinFromElement($, element);
-    if (!asin) continue;
-    const existing = items.get(asin);
+    const productAsin = asinFromElement($, element);
+    const wishlistItemId = wishlistItemIdFromElement($, element);
+    const title = titleFromElement($, element, productAsin || wishlistItemId || '');
+    if (!productAsin && (!wishlistItemId || !title)) continue;
+    const identifier = productAsin || `WISHLIST_ITEM:${wishlistItemId}`;
+    const existing = items.get(identifier);
     const item = {
-      asin,
-      title: titleFromElement($, element, asin),
-      url: urlFromElement($, element, asin, baseUrl)
+      asin: identifier,
+      title,
+      url: productAsin ? urlFromElement($, element, productAsin, baseUrl) : null,
+      wishlistItemId,
+      identifierType: productAsin ? 'asin' : 'wishlist_item'
     };
     if (!existing) {
-      items.set(asin, item);
+      items.set(identifier, item);
     } else {
-      items.set(asin, {
-        asin,
+      items.set(identifier, {
+        asin: identifier,
         title: existing.title || item.title,
-        url: existing.url || item.url
+        url: existing.url || item.url,
+        wishlistItemId: existing.wishlistItemId || item.wishlistItemId,
+        identifierType: existing.identifierType || item.identifierType
       });
     }
   }

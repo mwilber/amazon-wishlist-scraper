@@ -49,7 +49,7 @@ export async function scanWishlistPage({ page, list, timeoutMs, previousActiveCo
   }
   if (!inspection.explicitEmpty && inspection.candidateRowCount !== inspection.itemCount) {
     throw new PageStructureError(
-      `${list.name} exposed ${inspection.candidateRowCount} item rows but only ${inspection.itemCount} unique ASINs were parsed`
+      `${list.name} exposed ${inspection.candidateRowCount} item rows but only ${inspection.itemCount} unique item identities were parsed`
     );
   }
   if (!inspection.explicitEmpty && inspection.selectorCounts['#endOfListMarker'] !== 1) {

@@ -216,9 +216,13 @@ message remains pending and follows the normal retry/backoff policy.
 
 Scraper health is validated as a page contract. A populated list must have exactly one
 `#g-items` container, Amazon's `#endOfListMarker`, and a one-to-one match between scoped
-wish-list rows and unique parsed ASINs. A valid empty list must have an explicit empty-list
-marker and no item rows. Contradictory markers, partial results, missing containers, or
-unparseable rows fail closed and preserve the previous product state.
+wish-list rows and unique parsed item identities. Ordinary products use their ASIN. Manual
+entries and unavailable/removed products without an ASIN link use Amazon's stable wishlist
+row ID and visible label; the label is also used in notifications. Row IDs are retained for
+ordinary products so the same entry does not appear new if its ASIN link later disappears.
+A valid empty list must have an explicit empty-list marker and no item rows. Contradictory
+markers, partial results, missing containers, or unparseable rows fail closed and preserve
+the previous product state.
 
 One list failure does not stop remaining lists. Browser startup failures create one
 failure record and notification for every list that could not be scanned. Unexpected
