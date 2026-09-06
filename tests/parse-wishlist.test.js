@@ -2,7 +2,13 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { detectAccessIssue, hasWishlistStructure, parseWishlistHtml } from '../src/parse-wishlist.js';
+import {
+  detectAccessIssue,
+  hasExplicitEmptyState,
+  hasWishlistStructure,
+  inspectWishlistHtml,
+  parseWishlistHtml
+} from '../src/parse-wishlist.js';
 
 const fixtureUrl = new URL('./fixtures/wishlist.html', import.meta.url);
 const fixture = readFileSync(fileURLToPath(fixtureUrl), 'utf8');
@@ -27,6 +33,23 @@ test('extracts stable ASINs, titles, and canonical product URLs', () => {
     }
   ]);
   assert.equal(hasWishlistStructure(fixture), true);
+  assert.equal(items.some((item) => item.asin === 'B0REC99999'), false);
+});
+
+test('recognizes a definitive Amazon empty-list state without parsing recommendations', () => {
+  const html = `
+    <div id="wishlist-page">
+      <ul id="g-items"><li class="a-spacing-none"></li></ul>
+      <div id="no-items-section">There are no items in this List.</div>
+    </div>
+    <a href="/dp/B0REC99999">Recommended product</a>
+  `;
+  const inspection = inspectWishlistHtml(html, { baseUrl: 'https://www.amazon.com/list' });
+  assert.equal(hasExplicitEmptyState(html), true);
+  assert.equal(inspection.explicitEmpty, true);
+  assert.equal(inspection.itemCount, 0);
+  assert.deepEqual(inspection.items, []);
+  assert.equal(inspection.selectorCounts['a[href*="/dp/"]'], 1);
 });
 
 test('detects sign-in and CAPTCHA pages without interpreting products', () => {

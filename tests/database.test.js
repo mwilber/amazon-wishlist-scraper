@@ -111,3 +111,26 @@ test('message attempts back off and eventually become failed', (t) => {
   assert.equal(second.attempt_count, 2);
   assert.equal(second.next_attempt_at, null);
 });
+
+test('reset erases history but preserves the schema for a fresh baseline', (t) => {
+  const { database, advance } = createDatabase();
+  t.after(() => database.close());
+  save(database, [item('B000000001')]);
+  advance();
+  save(database, [item('B000000001'), item('B000000002')]);
+
+  const erased = database.resetHistory();
+  assert.deepEqual(erased, {
+    scope: 'all',
+    lists: 1,
+    products: 2,
+    scans: 2,
+    messages: 1
+  });
+  assert.deepEqual(database.getStatus(), { lists: [], messages: [], outstanding: [] });
+
+  advance();
+  const fresh = save(database, [item('B000000001'), item('B000000002')]);
+  assert.equal(fresh.isBaseline, true);
+  assert.equal(fresh.outboundMessage, null);
+});

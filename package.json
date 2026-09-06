@@ -11,8 +11,10 @@
     "start": "node src/cli.js scan",
     "scan": "node src/cli.js scan",
     "scan:headed": "node src/cli.js scan --headed",
+    "inspect": "node src/cli.js inspect",
     "profile": "node scripts/open-browser-profile.js",
     "status": "node src/cli.js status",
+    "reset": "node src/cli.js reset",
     "retry": "node src/cli.js retry",
     "test": "node --test"
   },

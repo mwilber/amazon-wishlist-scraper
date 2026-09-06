@@ -72,6 +72,21 @@ Run the first scan in a visible browser while setting up:
 npm run scan:headed
 ```
 
+To inspect Amazon's current page without changing SQLite state or sending a message:
+
+```bash
+npm run inspect
+```
+
+This logs every parsed ASIN/title/URL and the relevant selector counts. It also saves the
+full page HTML, screenshot, and a JSON summary under `diagnostics/*-inspection/`. Use
+`node src/cli.js inspect --headed` when visual browser troubleshooting is useful. A normal
+scan can emit the same structured `scan.contents` log entry with:
+
+```bash
+node src/cli.js scan --debug
+```
+
 The first successful non-empty scan for each list creates a baseline and sends nothing.
 Normal runs use:
 
@@ -184,8 +199,10 @@ removed and later re-added.
 ## Failure protection and diagnostics
 
 The monitor rejects sign-in pages, CAPTCHAs, HTTP/navigation failures, unrecognized page
-markup, and empty item results. On these failures it does not change product activity or
-create an item-added message. It records a failed scan and saves, when available:
+markup, and ambiguous empty item results. Amazon's explicit `no-items` state is accepted
+as a genuinely empty list; unrelated recommendation carousels are ignored. On failures
+the monitor does not change product activity or create an item-added message. It records
+a failed scan and saves, when available:
 
 - `diagnostics/<timestamp>-<list-id>/page.png`
 - `diagnostics/<timestamp>-<list-id>/page.html`
@@ -214,12 +231,32 @@ Changing `.env` does not require regenerating the plist. To uninstall:
 
 Uninstalling leaves the SQLite database, diagnostics, logs, and browser profile intact.
 
+## Reset scan history
+
+Reset removes lists, products, scans, and outbound-message history while preserving the
+database schema. The next successful scan becomes a silent baseline again. Because this
+also removes pending messages, explicit confirmation is required:
+
+```bash
+npm run reset -- --yes
+```
+
+Reset only one configured list with:
+
+```bash
+npm run reset -- --yes --list niece
+```
+
+Running `npm run reset` without `--yes` makes no changes.
+
 ## CLI reference
 
 ```text
-node src/cli.js scan [--headed]
+node src/cli.js scan [--headed] [--debug]
+node src/cli.js inspect [--headed]
 node src/cli.js retry [--all]
 node src/cli.js status
+node src/cli.js reset --yes [--list id]
 node src/cli.js profile [url]
 ```
 

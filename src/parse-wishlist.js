@@ -66,12 +66,10 @@ export function parseWishlistHtml(html, { baseUrl = 'https://www.amazon.com/' } 
   const $ = cheerio.load(html);
   const candidates = new Set();
   const selectors = [
-    'li[data-itemid]',
-    '[data-asin]',
-    '.g-item-sortable',
-    '[id^="item_"]',
-    'a[href*="/dp/"]',
-    'a[href*="/gp/product/"]'
+    '#g-items > li[data-itemid]',
+    '#g-items .g-item-sortable',
+    '#g-items [data-asin]',
+    '#wishlist-page li[data-itemid]'
   ];
   $(selectors.join(',')).each((_, element) => candidates.add(element));
 
@@ -100,7 +98,36 @@ export function parseWishlistHtml(html, { baseUrl = 'https://www.amazon.com/' } 
 
 export function hasWishlistStructure(html) {
   const $ = cheerio.load(html);
-  return $('#g-items, #wishlist-page, [data-itemid], .g-item-sortable, #profile-list-name').length > 0;
+  return $('#g-items, #wishlist-page, #no-items-section, .wl-list-empty, #profile-list-name').length > 0;
+}
+
+export function hasExplicitEmptyState(html) {
+  const $ = cheerio.load(html);
+  if ($('#no-items-section, .wl-list-empty, [data-testid="empty-list"]').length > 0) return true;
+  const listText = cleanText($('#wishlist-page, #g-items').text()) || '';
+  return /(?:there are no items|this list is empty|no items in this list)/i.test(listText);
+}
+
+export function inspectWishlistHtml(html, options = {}) {
+  const $ = cheerio.load(html);
+  const selectorCounts = Object.fromEntries([
+    '#g-items',
+    '#g-items > li',
+    '#g-items li[data-itemid]',
+    '#g-items .g-item-sortable',
+    '#g-items [data-asin]',
+    '#no-items-section',
+    '#endOfListMarker',
+    'a[href*="/dp/"]'
+  ].map((selector) => [selector, $(selector).length]));
+  const items = parseWishlistHtml(html, options);
+  return {
+    items,
+    itemCount: items.length,
+    explicitEmpty: hasExplicitEmptyState(html),
+    recognizedStructure: hasWishlistStructure(html),
+    selectorCounts
+  };
 }
 
 export function detectAccessIssue({ html, url = '', title = '' }) {

@@ -35,3 +35,23 @@ export async function saveDiagnostics({ rootPath, list, page, error, startedAt }
   }, null, 2), { mode: 0o600 });
   return directory;
 }
+
+export async function saveInspection({ rootPath, list, page, result }) {
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const directory = join(rootPath, `${stamp}-${safeSegment(list.id)}-inspection`);
+  await mkdir(directory, { recursive: true, mode: 0o700 });
+  await writeFile(join(directory, 'page.html'), result.html, { mode: 0o600 });
+  try {
+    await page.screenshot({ path: join(directory, 'page.png'), fullPage: true });
+  } catch {}
+  await writeFile(join(directory, 'summary.json'), JSON.stringify({
+    listId: list.id,
+    listName: list.name,
+    configuredUrl: list.url,
+    finalUrl: result.url,
+    pageTitle: result.title,
+    capturedAt: new Date().toISOString(),
+    ...result.inspection
+  }, null, 2), { mode: 0o600 });
+  return directory;
+}

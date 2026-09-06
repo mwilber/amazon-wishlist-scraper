@@ -1,7 +1,7 @@
 import { buildMessage, createMessageReporter } from './message-reporter.js';
 import { launchBrowser } from './browser.js';
 import { scanWishlistPage } from './scan-list.js';
-import { saveDiagnostics } from './diagnostics.js';
+import { saveDiagnostics, saveInspection } from './diagnostics.js';
 import { errorDetails } from './errors.js';
 
 function reporterOptions(config, fetchImpl) {
@@ -56,7 +56,66 @@ export async function retryPendingMessages({ database, config, logger, includeFa
   return { attempted: messages.length, failed };
 }
 
-export async function runMonitor({ database, config, logger, headed = false, fetchImpl, launchBrowserImpl = launchBrowser }) {
+export async function inspectWishlists({ config, logger, headed = false, launchBrowserImpl = launchBrowser }) {
+  let context;
+  let failures = 0;
+  const lists = [];
+  try {
+    context = await launchBrowserImpl(config, { headed });
+    for (const list of config.lists) {
+      const startedAt = new Date().toISOString();
+      const page = await context.newPage();
+      try {
+        const result = await scanWishlistPage({
+          page,
+          list,
+          timeoutMs: config.scanTimeoutMs,
+          previousActiveCount: 0
+        });
+        const diagnosticsPath = await saveInspection({
+          rootPath: config.diagnosticsPath,
+          list,
+          page,
+          result
+        });
+        const summary = {
+          listId: list.id,
+          listName: list.name,
+          finalUrl: result.url,
+          pageTitle: result.title,
+          itemCount: result.inspection.itemCount,
+          explicitEmpty: result.inspection.explicitEmpty,
+          selectorCounts: result.inspection.selectorCounts,
+          items: result.items,
+          diagnosticsPath
+        };
+        lists.push(summary);
+        await logger.info('scan.contents', summary);
+      } catch (error) {
+        failures += 1;
+        const details = errorDetails(error);
+        const diagnosticsPath = await saveDiagnostics({
+          rootPath: config.diagnosticsPath,
+          list,
+          page,
+          error,
+          startedAt
+        }).catch(() => null);
+        await logger.error('scan.inspect_failed', { listId: list.id, ...details, diagnosticsPath });
+      } finally {
+        await page.close().catch(() => {});
+      }
+    }
+  } catch (error) {
+    failures += config.lists.length || 1;
+    await logger.error('browser.failed', errorDetails(error));
+  } finally {
+    await context?.close().catch(() => {});
+  }
+  return { failures, lists };
+}
+
+export async function runMonitor({ database, config, logger, headed = false, debug = false, fetchImpl, launchBrowserImpl = launchBrowser }) {
   let scanFailures = 0;
   let deliveryFailures = 0;
   const retryResult = await retryPendingMessages({ database, config, logger, fetchImpl });
@@ -80,6 +139,18 @@ export async function runMonitor({ database, config, logger, headed = false, fet
           timeoutMs: config.scanTimeoutMs,
           previousActiveCount: state.activeItems.length
         });
+        if (debug) {
+          await logger.info('scan.contents', {
+            listId: list.id,
+            listName: list.name,
+            finalUrl: extracted.url,
+            pageTitle: extracted.title,
+            itemCount: extracted.inspection.itemCount,
+            explicitEmpty: extracted.inspection.explicitEmpty,
+            selectorCounts: extracted.inspection.selectorCounts,
+            items: extracted.items
+          });
+        }
         scanResult = database.persistSuccessfulScan({
           list,
           items: extracted.items,

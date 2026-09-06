@@ -293,6 +293,26 @@ export class WishlistDatabase {
     return this.getMessage(id);
   }
 
+  resetHistory({ listId = null } = {}) {
+    try {
+      return this.transaction(() => {
+        const condition = listId ? ' WHERE list_id = ?' : '';
+        const listCondition = listId ? ' WHERE id = ?' : '';
+        const parameters = listId ? [listId] : [];
+        const counts = {
+          lists: this.db.prepare(`SELECT COUNT(*) AS count FROM lists${listCondition}`).get(...parameters).count,
+          products: this.db.prepare(`SELECT COUNT(*) AS count FROM products${condition}`).get(...parameters).count,
+          scans: this.db.prepare(`SELECT COUNT(*) AS count FROM scans${condition}`).get(...parameters).count,
+          messages: this.db.prepare(`SELECT COUNT(*) AS count FROM outbound_messages${condition}`).get(...parameters).count
+        };
+        this.db.prepare(`DELETE FROM lists${listCondition}`).run(...parameters);
+        return { scope: listId || 'all', ...counts };
+      });
+    } catch (error) {
+      throw new DatabaseError(`Could not reset history${listId ? ` for ${listId}` : ''}: ${error.message}`, { cause: error });
+    }
+  }
+
   getStatus() {
     const lists = this.db.prepare(`
       SELECT

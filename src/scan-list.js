@@ -6,7 +6,7 @@ import {
   SuspiciousResultError
 } from './errors.js';
 import { settleWishlistPage } from './browser.js';
-import { detectAccessIssue, hasWishlistStructure, parseWishlistHtml } from './parse-wishlist.js';
+import { detectAccessIssue, inspectWishlistHtml } from './parse-wishlist.js';
 
 export async function scanWishlistPage({ page, list, timeoutMs, previousActiveCount = 0 }) {
   let response;
@@ -29,13 +29,13 @@ export async function scanWishlistPage({ page, list, timeoutMs, previousActiveCo
     throw new CaptchaDetectedError(`${list.name} displayed an Amazon CAPTCHA; no bypass was attempted`);
   }
 
-  const items = parseWishlistHtml(html, { baseUrl: url || list.url });
-  if (!hasWishlistStructure(html) && items.length === 0) {
+  const inspection = inspectWishlistHtml(html, { baseUrl: url || list.url });
+  if (!inspection.recognizedStructure && inspection.items.length === 0) {
     throw new PageStructureError(`${list.name} did not contain recognized wish-list markup`);
   }
-  if (items.length === 0) {
+  if (inspection.items.length === 0 && !inspection.explicitEmpty) {
     const context = previousActiveCount > 0 ? `; ${previousActiveCount} items were previously active` : '';
     throw new SuspiciousResultError(`${list.name} returned no products${context}`);
   }
-  return { items, html, title, url };
+  return { items: inspection.items, html, title, url, inspection };
 }

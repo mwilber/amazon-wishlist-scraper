@@ -28,7 +28,20 @@ const list = {
   url: 'https://www.amazon.com/hz/wishlist/ls/EXAMPLE'
 };
 
-test('rejects a recognized but unexpectedly empty wish list', async () => {
+test('accepts a definitive empty-list state without treating recommendations as items', async () => {
+  const result = await scanWishlistPage({
+    page: pageFor({
+      html: '<html><div id="wishlist-page"><ul id="g-items"></ul><div id="no-items-section">There are no items in this List.</div></div><a href="/dp/B0REC99999">Recommendation</a></html>'
+    }),
+    list,
+    timeoutMs: 1_000,
+    previousActiveCount: 3
+  });
+  assert.deepEqual(result.items, []);
+  assert.equal(result.inspection.explicitEmpty, true);
+});
+
+test('rejects a recognized but ambiguous empty wish list', async () => {
   await assert.rejects(scanWishlistPage({
     page: pageFor({ html: '<html><div id="wishlist-page"><ul id="g-items"></ul></div></html>' }),
     list,

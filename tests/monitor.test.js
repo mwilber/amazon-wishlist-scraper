@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { WishlistDatabase } from '../src/database.js';
 import { createLogger } from '../src/logger.js';
-import { retryPendingMessages, runMonitor } from '../src/index.js';
+import { inspectWishlists, retryPendingMessages, runMonitor } from '../src/index.js';
 
 const fixture = readFileSync(fileURLToPath(new URL('./fixtures/wishlist.html', import.meta.url)), 'utf8');
 const extraItems = fixture.replace('</ul>', `
@@ -168,4 +168,23 @@ test('one list failure does not prevent a later list from being scanned', async 
   assert.equal(diagnosticDirectories.length, 1);
   assert.ok(existsSync(join(diagnosticRoot, diagnosticDirectories[0], 'page.html')));
   assert.ok(existsSync(join(diagnosticRoot, diagnosticDirectories[0], 'metadata.json')));
+});
+
+test('read-only inspection reports items and saves page evidence', async () => {
+  const { config, logger, root } = setup();
+  const result = await inspectWishlists({
+    config,
+    logger,
+    launchBrowserImpl: fakeBrowser(() => fixture)
+  });
+  assert.equal(result.failures, 0);
+  assert.equal(result.lists.length, 1);
+  assert.equal(result.lists[0].itemCount, 3);
+  assert.deepEqual(result.lists[0].items.map((item) => item.asin), [
+    'B0AAA11111', 'B0BBB22222', 'B0CCC33333'
+  ]);
+  const inspectionDirectory = result.lists[0].diagnosticsPath;
+  assert.ok(inspectionDirectory.startsWith(join(root, 'diagnostics')));
+  assert.ok(existsSync(join(inspectionDirectory, 'page.html')));
+  assert.ok(existsSync(join(inspectionDirectory, 'summary.json')));
 });
