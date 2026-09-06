@@ -120,14 +120,20 @@ function validateList(list, index) {
   };
 }
 
-export function loadConfig({ rootDir = process.cwd(), requireLists = true, requireEndpoint = true, env = process.env } = {}) {
+export function loadConfig({
+  rootDir = process.cwd(),
+  requireLists = true,
+  requireEndpoint = true,
+  loadLists = true,
+  env = process.env
+} = {}) {
   const envPath = resolve(rootDir, '.env');
   const fileEnv = existsSync(envPath) ? parseEnvFile(readFileSync(envPath, 'utf8')) : {};
   const values = { ...fileEnv, ...env };
   const listsPath = pathFrom(rootDir, values.LISTS_CONFIG_PATH, 'config/lists.json');
   let lists = [];
 
-  if (existsSync(listsPath)) {
+  if (loadLists && existsSync(listsPath)) {
     try {
       const parsed = JSON.parse(readFileSync(listsPath, 'utf8'));
       if (!Array.isArray(parsed)) throw new Error('top level must be an array');
@@ -165,6 +171,9 @@ export function loadConfig({ rootDir = process.cwd(), requireLists = true, requi
       ['message', 'sid']
     ),
     sidNotificationTitle: sidTitle(values.SID_NOTIFICATION_TITLE),
+    sidFailureNotificationTitle: sidTitle(
+      values.SID_FAILURE_NOTIFICATION_TITLE || 'Amazon Wish List Monitor Failure'
+    ),
     sidNotificationSource: sidSource(values.SID_NOTIFICATION_SOURCE),
     headless: booleanValue(values.HEADLESS, true, 'HEADLESS'),
     scanTimeoutMs: positiveInteger(values.SCAN_TIMEOUT_MS, 45_000, 'SCAN_TIMEOUT_MS', 1_000),

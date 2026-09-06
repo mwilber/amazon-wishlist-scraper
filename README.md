@@ -40,6 +40,7 @@ MESSAGE_ENDPOINT_URL=https://sid.example.com/api/notifications
 MESSAGE_ENDPOINT_TOKEN=your-sid-api-token
 MESSAGE_ENDPOINT_FORMAT=sid
 SID_NOTIFICATION_TITLE=Amazon Wish List Update
+SID_FAILURE_NOTIFICATION_TITLE=Amazon Wish List Monitor Failure
 SID_NOTIFICATION_SOURCE=amazon-wishlist-monitor
 ```
 
@@ -87,7 +88,8 @@ scan can emit the same structured `scan.contents` log entry with:
 node src/cli.js scan --debug
 ```
 
-The first successful non-empty scan for each list creates a baseline and sends nothing.
+The first successful scan for each list creates a baseline and sends nothing. A page is
+successful only when it contains validated item rows or Amazon's explicit empty-list state.
 Normal runs use:
 
 ```bash
@@ -208,7 +210,21 @@ a failed scan and saves, when available:
 - `diagnostics/<timestamp>-<list-id>/page.html`
 - `diagnostics/<timestamp>-<list-id>/metadata.json`
 
-One list failure does not stop remaining lists. Logs are JSON Lines in
+It also creates a durable outbound message titled by `SID_FAILURE_NOTIFICATION_TITLE`.
+The error category and reason are included in the body. If delivery fails, that failure
+message remains pending and follows the normal retry/backoff policy.
+
+Scraper health is validated as a page contract. A populated list must have exactly one
+`#g-items` container, Amazon's `#endOfListMarker`, and a one-to-one match between scoped
+wish-list rows and unique parsed ASINs. A valid empty list must have an explicit empty-list
+marker and no item rows. Contradictory markers, partial results, missing containers, or
+unparseable rows fail closed and preserve the previous product state.
+
+One list failure does not stop remaining lists. Browser startup failures create one
+failure record and notification for every list that could not be scanned. Unexpected
+fatal process errors are reported directly when enough endpoint configuration can still
+be loaded. A failure of SID itself cannot be reported through SID, but it is logged and
+the already-persisted message remains queued. Logs are JSON Lines in
 `logs/wishlist-monitor.log`. Browser profile contents, cookies, tokens, and request
 authorization headers are never logged.
 

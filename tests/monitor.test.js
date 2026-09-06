@@ -53,6 +53,7 @@ function setup() {
     endpointToken: null,
     endpointFormat: 'message',
     sidNotificationTitle: 'Amazon Wish List Update',
+    sidFailureNotificationTitle: 'Amazon Wish List Monitor Failure',
     sidNotificationSource: 'amazon-wishlist-monitor',
     headless: true,
     scanTimeoutMs: 1_000,
@@ -147,18 +148,25 @@ test('one list failure does not prevent a later list from being scanned', async 
     { id: 'family', name: 'Family List', url: 'https://www.amazon.com/hz/wishlist/ls/EXAMPLE' }
   ];
   const pages = ['<html><body>Unexpected page</body></html>', fixture];
+  const notifications = [];
   let index = 0;
   const result = await runMonitor({
     database,
     config,
     logger,
-    fetchImpl: async () => ({ ok: true, status: 200 }),
+    fetchImpl: async (_, options) => {
+      notifications.push(JSON.parse(options.body));
+      return { ok: true, status: 200 };
+    },
     launchBrowserImpl: async () => ({
       async newPage() { return fakePage(pages[index++]); },
       async close() {}
     })
   });
   assert.equal(result.scanFailures, 1);
+  assert.equal(result.deliveryFailures, 0);
+  assert.equal(notifications.length, 1);
+  assert.match(notifications[0].message, /scan failed for Broken List/);
   const status = database.getStatus();
   assert.equal(status.lists.find((entry) => entry.id === 'broken').last_scan_status, 'failed');
   assert.equal(status.lists.find((entry) => entry.id === 'family').last_scan_status, 'success');
@@ -168,6 +176,37 @@ test('one list failure does not prevent a later list from being scanned', async 
   assert.equal(diagnosticDirectories.length, 1);
   assert.ok(existsSync(join(diagnosticRoot, diagnosticDirectories[0], 'page.html')));
   assert.ok(existsSync(join(diagnosticRoot, diagnosticDirectories[0], 'metadata.json')));
+  const failureMessage = database.db.prepare(`
+    SELECT title, kind, status FROM outbound_messages WHERE list_id = 'broken'
+  `).get();
+  assert.equal(failureMessage.title, 'Amazon Wish List Monitor Failure');
+  assert.equal(failureMessage.kind, 'scan_failure');
+  assert.equal(failureMessage.status, 'sent');
+});
+
+test('browser startup failures notify for every unscanned list', async (t) => {
+  const { database, config, logger } = setup();
+  t.after(() => database.close());
+  config.lists.push({
+    id: 'second',
+    name: 'Second List',
+    url: 'https://www.amazon.com/hz/wishlist/ls/SECOND'
+  });
+  const notifications = [];
+  const result = await runMonitor({
+    database,
+    config,
+    logger,
+    launchBrowserImpl: async () => { throw new Error('Chromium could not start'); },
+    fetchImpl: async (_, options) => {
+      notifications.push(JSON.parse(options.body));
+      return { ok: true, status: 201 };
+    }
+  });
+  assert.deepEqual(result, { scanFailures: 2, deliveryFailures: 0 });
+  assert.equal(notifications.length, 2);
+  assert.ok(notifications.every((payload) => /Chromium could not start/.test(payload.message)));
+  assert.deepEqual(database.getStatus().lists.map((entry) => entry.last_scan_status), ['failed', 'failed']);
 });
 
 test('read-only inspection reports items and saves page evidence', async () => {

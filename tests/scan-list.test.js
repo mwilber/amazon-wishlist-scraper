@@ -4,6 +4,7 @@ import { scanWishlistPage } from '../src/scan-list.js';
 import {
   AuthenticationRequiredError,
   CaptchaDetectedError,
+  PageStructureError,
   SuspiciousResultError
 } from '../src/errors.js';
 
@@ -47,6 +48,36 @@ test('rejects a recognized but ambiguous empty wish list', async () => {
     list,
     timeoutMs: 1_000,
     previousActiveCount: 3
+  }), SuspiciousResultError);
+});
+
+test('rejects non-empty results without a completed-list marker', async () => {
+  await assert.rejects(scanWishlistPage({
+    page: pageFor({
+      html: '<html><div id="wishlist-page"><ul id="g-items"><li class="g-item-sortable" data-itemid="ITEM"><h2><a href="/dp/B000000001">Item</a></h2></li></ul></div></html>'
+    }),
+    list,
+    timeoutMs: 1_000
+  }), SuspiciousResultError);
+});
+
+test('rejects item rows that cannot all be mapped to unique ASINs', async () => {
+  await assert.rejects(scanWishlistPage({
+    page: pageFor({
+      html: '<html><div id="wishlist-page"><ul id="g-items"><li class="g-item-sortable" data-itemid="ONE"><h2><a href="/dp/B000000001">Item</a></h2></li><li class="g-item-sortable" data-itemid="TWO">Changed markup</li></ul><div id="endOfListMarker"></div></div></html>'
+    }),
+    list,
+    timeoutMs: 1_000
+  }), PageStructureError);
+});
+
+test('rejects contradictory empty and populated markers', async () => {
+  await assert.rejects(scanWishlistPage({
+    page: pageFor({
+      html: '<html><div id="wishlist-page"><ul id="g-items"><li class="g-item-sortable" data-itemid="ONE"><h2><a href="/dp/B000000001">Item</a></h2></li></ul><div id="no-items-section">No items</div><div id="endOfListMarker"></div></div></html>'
+    }),
+    list,
+    timeoutMs: 1_000
   }), SuspiciousResultError);
 });
 

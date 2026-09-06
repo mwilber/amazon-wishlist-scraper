@@ -90,6 +90,26 @@ test('records scan failures without changing product activity', (t) => {
   assert.equal(database.getStatus().lists[0].last_scan_status, 'failed');
 });
 
+test('failed scans atomically queue a titled failure notification', (t) => {
+  const { database } = createDatabase();
+  t.after(() => database.close());
+  save(database, [item('B000000001')]);
+  const result = database.persistFailedScan({
+    list,
+    startedAt: '2026-01-02T00:00:00.000Z',
+    errorCategory: 'PageStructureError',
+    errorMessage: 'Item rows no longer match parsed ASINs',
+    diagnosticsPath: '/tmp/example',
+    notificationTitle: 'Amazon Wish List Monitor Failure',
+    notificationMessage: 'The scan failed and history was not changed.'
+  });
+  assert.ok(result.scanId);
+  assert.equal(result.outboundMessage.kind, 'scan_failure');
+  assert.equal(result.outboundMessage.title, 'Amazon Wish List Monitor Failure');
+  assert.equal(result.outboundMessage.status, 'pending');
+  assert.equal(database.getListState(list.id).activeItems.length, 1);
+});
+
 test('message attempts back off and eventually become failed', (t) => {
   const { database, advance } = createDatabase();
   t.after(() => database.close());

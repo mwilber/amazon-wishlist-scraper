@@ -7,13 +7,16 @@ message to a configured HTTP endpoint for each list that gained products.
 
 ## Safety invariants
 
-- The first valid, non-empty scan establishes a silent baseline.
+- The first valid scan, including a verified empty list, establishes a silent baseline.
 - Historical ASINs are never announced again, including after removal and re-addition.
-- Sign-in, CAPTCHA, unrecognized markup, navigation errors, and empty results fail closed.
+- Sign-in, CAPTCHA, unrecognized markup, navigation errors, ambiguous empty results,
+  incomplete loading, and item-row/ASIN mismatches fail closed.
 - A failed scan never updates active products or creates an outbound message.
 - Product state, scan history, and a pending outbound message are committed together.
 - HTTP delivery occurs after that commit. Delivery failure does not invalidate the scan.
 - Pending delivery is retried from stored message text, without rescanning Amazon.
+- Scan and browser failures create durable outbound failure messages without changing
+  product state; fatal startup errors use best-effort direct reporting.
 - The monitor does not bypass access controls, modify lists, purchase products, monitor
   prices, or send notifications directly.
 

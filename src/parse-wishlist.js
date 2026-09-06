@@ -68,8 +68,7 @@ export function parseWishlistHtml(html, { baseUrl = 'https://www.amazon.com/' } 
   const selectors = [
     '#g-items > li[data-itemid]',
     '#g-items .g-item-sortable',
-    '#g-items [data-asin]',
-    '#wishlist-page li[data-itemid]'
+    '#g-items [data-asin]'
   ];
   $(selectors.join(',')).each((_, element) => candidates.add(element));
 
@@ -120,12 +119,16 @@ export function inspectWishlistHtml(html, options = {}) {
     '#endOfListMarker',
     'a[href*="/dp/"]'
   ].map((selector) => [selector, $(selector).length]));
+  const candidateRowCount = $(
+    '#g-items > li[data-itemid], #g-items .g-item-sortable, #g-items [data-asin]'
+  ).length;
   const items = parseWishlistHtml(html, options);
   return {
     items,
     itemCount: items.length,
     explicitEmpty: hasExplicitEmptyState(html),
     recognizedStructure: hasWishlistStructure(html),
+    candidateRowCount,
     selectorCounts
   };
 }

@@ -43,6 +43,7 @@ test('loads and validates SID notification settings', () => {
   });
   assert.equal(config.endpointFormat, 'sid');
   assert.equal(config.sidNotificationTitle, 'Wish list changed');
+  assert.equal(config.sidFailureNotificationTitle, 'Amazon Wish List Monitor Failure');
   assert.equal(config.sidNotificationSource, 'wishlist-monitor');
 });
 
@@ -92,4 +93,18 @@ test('requires a message endpoint for scan configuration', () => {
     { id: 'family', name: 'Family', url: 'https://www.amazon.com/hz/wishlist/ls/ABC' }
   ]);
   assert.throws(() => loadConfig({ rootDir, env: {} }), /MESSAGE_ENDPOINT_URL/);
+});
+
+test('can load notification settings while bypassing a broken list file for fatal reporting', () => {
+  const rootDir = projectWithLists([]);
+  writeFileSync(join(rootDir, 'config/lists.json'), '{broken json');
+  const config = loadConfig({
+    rootDir,
+    requireLists: false,
+    requireEndpoint: true,
+    loadLists: false,
+    env: { MESSAGE_ENDPOINT_URL: 'https://example.test/messages' }
+  });
+  assert.deepEqual(config.lists, []);
+  assert.equal(config.endpointUrl, 'https://example.test/messages');
 });

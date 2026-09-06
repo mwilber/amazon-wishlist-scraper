@@ -41,6 +41,15 @@ export function buildMessage(listName, items, maxLength = 500) {
   return truncate(`${countLabel(items.length)} new items were added to ${listName}.`, maxLength);
 }
 
+export function buildFailureMessage(listName, error, maxLength = 500) {
+  const category = error?.name || 'Error';
+  const reason = error?.message || String(error);
+  return truncate(
+    `Amazon wish-list scan failed for ${listName} (${category}): ${reason} Product history was not changed.`,
+    maxLength
+  );
+}
+
 export function buildRequestBody(message, {
   endpointFormat = 'message',
   sidTitle = 'Amazon Wish List Update',
@@ -64,7 +73,7 @@ export function createMessageReporter({
   if (!endpointUrl) throw new TypeError('endpointUrl is required');
   if (typeof fetchImpl !== 'function') throw new TypeError('fetchImpl must be a function');
 
-  return async function sendMessage(message) {
+  return async function sendMessage(message, { title = null } = {}) {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
     try {
@@ -73,7 +82,11 @@ export function createMessageReporter({
       const response = await fetchImpl(endpointUrl, {
         method: 'POST',
         headers,
-        body: JSON.stringify(buildRequestBody(message, { endpointFormat, sidTitle, sidSource })),
+        body: JSON.stringify(buildRequestBody(message, {
+          endpointFormat,
+          sidTitle: title || sidTitle,
+          sidSource
+        })),
         signal: controller.signal
       });
       if (!response.ok) {

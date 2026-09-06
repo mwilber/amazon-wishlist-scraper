@@ -4,9 +4,15 @@ import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { createLogger } from './logger.js';
 import { WishlistDatabase } from './database.js';
-import { inspectWishlists, runMonitor, retryPendingMessages } from './index.js';
+import {
+  createConfiguredReporter,
+  inspectWishlists,
+  runMonitor,
+  retryPendingMessages
+} from './index.js';
 import { launchBrowser } from './browser.js';
 import { errorDetails } from './errors.js';
+import { buildFailureMessage } from './message-reporter.js';
 
 function usage() {
   return `Usage: node src/cli.js <command> [options]
@@ -30,6 +36,39 @@ async function openProfile(config, url) {
   await page.goto(url || 'https://www.amazon.com/', { waitUntil: 'domcontentloaded', timeout: config.scanTimeoutMs });
   process.stdout.write('Browser profile is open. Sign in or verify list access, then close the browser window.\n');
   await new Promise((resolve) => context.once('close', resolve));
+}
+
+export async function sendFatalErrorNotification(error, {
+  configLoader = loadConfig,
+  fetchImpl = globalThis.fetch,
+  output = process.stderr
+} = {}) {
+  try {
+    const config = configLoader({
+      requireLists: false,
+      requireEndpoint: true,
+      loadLists: false
+    });
+    const reporter = createConfiguredReporter(config, fetchImpl);
+    const message = buildFailureMessage(
+      'the monitor process',
+      error,
+      config.maxMessageLength
+    );
+    const result = await reporter(message, { title: config.sidFailureNotificationTitle });
+    output.write(`${JSON.stringify({
+      level: 'info',
+      event: 'fatal_notification.sent',
+      httpStatus: result.status
+    })}\n`);
+  } catch (notificationError) {
+    output.write(`${JSON.stringify({
+      level: 'error',
+      event: 'fatal_notification.failed',
+      category: notificationError.name,
+      message: notificationError.message
+    })}\n`);
+  }
 }
 
 export async function main(argv = process.argv.slice(2)) {
@@ -117,10 +156,18 @@ export async function main(argv = process.argv.slice(2)) {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
+  let fatalReporting = false;
+  const handleFatalProcessError = async (reason) => {
+    if (fatalReporting) return;
+    fatalReporting = true;
+    const error = reason instanceof Error ? reason : new Error(String(reason));
+    process.stderr.write(`${JSON.stringify({ level: 'error', event: 'run.fatal', ...errorDetails(error) })}\n`);
+    await sendFatalErrorNotification(error);
+    process.exitCode = 1;
+  };
+  process.once('uncaughtException', handleFatalProcessError);
+  process.once('unhandledRejection', handleFatalProcessError);
   main().then((code) => {
     process.exitCode = code;
-  }).catch((error) => {
-    process.stderr.write(`${JSON.stringify({ level: 'error', event: 'run.fatal', ...errorDetails(error) })}\n`);
-    process.exitCode = 1;
-  });
+  }).catch(handleFatalProcessError);
 }

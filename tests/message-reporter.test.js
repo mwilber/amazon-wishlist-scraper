@@ -1,6 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildMessage, buildRequestBody, createMessageReporter } from '../src/message-reporter.js';
+import {
+  buildFailureMessage,
+  buildMessage,
+  buildRequestBody,
+  createMessageReporter
+} from '../src/message-reporter.js';
 import { MessageDeliveryError } from '../src/errors.js';
 
 test('builds the requested singular message', () => {
@@ -8,6 +13,18 @@ test('builds the requested singular message', () => {
     buildMessage("Niece's Wish List", [{ asin: 'B000000001', title: 'LEGO Tree House' }]),
     "A new item was added to Niece's Wish List: LEGO Tree House."
   );
+});
+
+test('builds bounded failure messages that explain state was preserved', () => {
+  const message = buildFailureMessage(
+    'Family List',
+    Object.assign(new Error('Amazon markup did not match the expected layout'), { name: 'PageStructureError' }),
+    160
+  );
+  assert.ok(message.length <= 160);
+  assert.match(message, /Family List/);
+  assert.match(message, /PageStructureError/);
+  assert.match(message, /history was not changed/i);
 });
 
 test('builds a natural combined message for multiple items', () => {
@@ -85,6 +102,22 @@ test('builds and posts SID notification payloads', async () => {
     body: 'A new item appeared.',
     source: 'amazon-wishlist-monitor'
   });
+});
+
+test('allows a stored failure message to override the SID title', async () => {
+  let payload;
+  const reporter = createMessageReporter({
+    endpointUrl: 'https://sid.example.test/api/notifications',
+    endpointFormat: 'sid',
+    sidTitle: 'Amazon Wish List Update',
+    fetchImpl: async (_, options) => {
+      payload = JSON.parse(options.body);
+      return { ok: true, status: 201 };
+    }
+  });
+  await reporter('The scan failed.', { title: 'Amazon Wish List Monitor Failure' });
+  assert.equal(payload.title, 'Amazon Wish List Monitor Failure');
+  assert.equal(payload.body, 'The scan failed.');
 });
 
 test('omits authorization when no token is configured', async () => {

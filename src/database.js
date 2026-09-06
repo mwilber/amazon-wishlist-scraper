@@ -64,6 +64,13 @@ const MIGRATIONS = [
       CREATE INDEX IF NOT EXISTS idx_scans_list_completed
         ON scans(list_id, completed_at DESC);
     `
+  },
+  {
+    version: 2,
+    sql: `
+      ALTER TABLE outbound_messages ADD COLUMN title TEXT;
+      ALTER TABLE outbound_messages ADD COLUMN kind TEXT NOT NULL DEFAULT 'item_added';
+    `
   }
 ];
 
@@ -247,6 +254,57 @@ export class WishlistDatabase {
     }
   }
 
+  persistFailedScan({
+    list,
+    startedAt,
+    errorCategory,
+    errorMessage,
+    diagnosticsPath = null,
+    notificationTitle,
+    notificationMessage
+  }) {
+    try {
+      return this.transaction(() => {
+        const completedAt = nowIso(this.clock);
+        this.upsertList(list, completedAt);
+        const scanResult = this.db.prepare(`
+          INSERT INTO scans(
+            list_id, started_at, completed_at, status,
+            error_category, error_message, diagnostics_path
+          ) VALUES (?, ?, ?, 'failed', ?, ?, ?)
+        `).run(
+          list.id,
+          startedAt,
+          completedAt,
+          errorCategory,
+          errorMessage,
+          diagnosticsPath
+        );
+        const scanId = Number(scanResult.lastInsertRowid);
+        const dedupeKey = createHash('sha256').update(`scan-failure:${scanId}`).digest('hex');
+        const messageResult = this.db.prepare(`
+          INSERT INTO outbound_messages(
+            list_id, scan_id, dedupe_key, message, title, kind,
+            created_at, status, next_attempt_at
+          ) VALUES (?, ?, ?, ?, ?, 'scan_failure', ?, 'pending', ?)
+        `).run(
+          list.id,
+          scanId,
+          dedupeKey,
+          notificationMessage,
+          notificationTitle,
+          completedAt,
+          completedAt
+        );
+        const outboundMessage = this.db.prepare('SELECT * FROM outbound_messages WHERE id = ?')
+          .get(Number(messageResult.lastInsertRowid));
+        return { scanId, outboundMessage };
+      });
+    } catch (error) {
+      throw new DatabaseError(`Could not save failed scan for ${list.id}: ${error.message}`, { cause: error });
+    }
+  }
+
   getMessage(id) {
     return this.db.prepare('SELECT * FROM outbound_messages WHERE id = ?').get(id) || null;
   }
@@ -331,7 +389,7 @@ export class WishlistDatabase {
     `).all();
     const outstanding = this.db.prepare(`
       SELECT id, list_id, message, created_at, status, attempt_count,
-             last_attempt_at, next_attempt_at, last_error
+             title, kind, last_attempt_at, next_attempt_at, last_error
       FROM outbound_messages
       WHERE status != 'sent'
       ORDER BY created_at

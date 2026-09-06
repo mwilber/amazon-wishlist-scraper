@@ -33,9 +33,29 @@ export async function scanWishlistPage({ page, list, timeoutMs, previousActiveCo
   if (!inspection.recognizedStructure && inspection.items.length === 0) {
     throw new PageStructureError(`${list.name} did not contain recognized wish-list markup`);
   }
+  if (inspection.selectorCounts['#g-items'] !== 1) {
+    throw new PageStructureError(
+      `${list.name} contained ${inspection.selectorCounts['#g-items']} wish-list containers; expected exactly one`
+    );
+  }
+  if (inspection.explicitEmpty && inspection.candidateRowCount > 0) {
+    throw new SuspiciousResultError(
+      `${list.name} simultaneously displayed an empty-list marker and ${inspection.candidateRowCount} item rows`
+    );
+  }
   if (inspection.items.length === 0 && !inspection.explicitEmpty) {
     const context = previousActiveCount > 0 ? `; ${previousActiveCount} items were previously active` : '';
     throw new SuspiciousResultError(`${list.name} returned no products${context}`);
+  }
+  if (!inspection.explicitEmpty && inspection.candidateRowCount !== inspection.itemCount) {
+    throw new PageStructureError(
+      `${list.name} exposed ${inspection.candidateRowCount} item rows but only ${inspection.itemCount} unique ASINs were parsed`
+    );
+  }
+  if (!inspection.explicitEmpty && inspection.selectorCounts['#endOfListMarker'] !== 1) {
+    throw new SuspiciousResultError(
+      `${list.name} did not expose Amazon's end-of-list marker after scrolling; the result may be incomplete`
+    );
   }
   return { items: inspection.items, html, title, url, inspection };
 }
