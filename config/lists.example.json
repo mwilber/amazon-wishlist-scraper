@@ -1,0 +1,14 @@
+[
+  {
+    "id": "niece",
+    "name": "Niece's Wish List",
+    "url": "https://www.amazon.com/hz/wishlist/ls/REPLACE_WITH_LIST_ID",
+    "enabled": true
+  },
+  {
+    "id": "nephew",
+    "name": "Nephew's Wish List",
+    "url": "https://www.amazon.com/hz/wishlist/ls/REPLACE_WITH_LIST_ID",
+    "enabled": true
+  }
+]

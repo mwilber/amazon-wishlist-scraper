@@ -1,0 +1,23 @@
+{
+  "name": "amazon-wishlist-monitor",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Conservative local Amazon wish-list monitor with HTTP message delivery",
+  "type": "module",
+  "engines": {
+    "node": ">=22.5.0"
+  },
+  "scripts": {
+    "start": "node src/cli.js scan",
+    "scan": "node src/cli.js scan",
+    "scan:headed": "node src/cli.js scan --headed",
+    "profile": "node scripts/open-browser-profile.js",
+    "status": "node src/cli.js status",
+    "retry": "node src/cli.js retry",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "cheerio": "^1.1.2",
+    "playwright": "^1.55.0"
+  }
+}
