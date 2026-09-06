@@ -41,7 +41,26 @@ export function buildMessage(listName, items, maxLength = 500) {
   return truncate(`${countLabel(items.length)} new items were added to ${listName}.`, maxLength);
 }
 
-export function createMessageReporter({ endpointUrl, token = null, timeoutMs = 10_000, fetchImpl = globalThis.fetch }) {
+export function buildRequestBody(message, {
+  endpointFormat = 'message',
+  sidTitle = 'Amazon Wish List Update',
+  sidSource = 'amazon-wishlist-monitor'
+} = {}) {
+  if (endpointFormat === 'sid') {
+    return { title: sidTitle, body: message, source: sidSource };
+  }
+  return { message };
+}
+
+export function createMessageReporter({
+  endpointUrl,
+  token = null,
+  timeoutMs = 10_000,
+  endpointFormat = 'message',
+  sidTitle = 'Amazon Wish List Update',
+  sidSource = 'amazon-wishlist-monitor',
+  fetchImpl = globalThis.fetch
+}) {
   if (!endpointUrl) throw new TypeError('endpointUrl is required');
   if (typeof fetchImpl !== 'function') throw new TypeError('fetchImpl must be a function');
 
@@ -54,7 +73,7 @@ export function createMessageReporter({ endpointUrl, token = null, timeoutMs = 1
       const response = await fetchImpl(endpointUrl, {
         method: 'POST',
         headers,
-        body: JSON.stringify({ message }),
+        body: JSON.stringify(buildRequestBody(message, { endpointFormat, sidTitle, sidSource })),
         signal: controller.signal
       });
       if (!response.ok) {

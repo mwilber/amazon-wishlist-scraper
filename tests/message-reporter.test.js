@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildMessage, createMessageReporter } from '../src/message-reporter.js';
+import { buildMessage, buildRequestBody, createMessageReporter } from '../src/message-reporter.js';
 import { MessageDeliveryError } from '../src/errors.js';
 
 test('builds the requested singular message', () => {
@@ -55,6 +55,36 @@ test('posts exactly the JSON message with an optional bearer token', async () =>
   assert.deepEqual(JSON.parse(calls[0][1].body), { message: 'Hello' });
   assert.equal(calls[0][1].headers.authorization, 'Bearer private-value');
   assert.equal(calls[0][1].headers['content-type'], 'application/json');
+});
+
+test('builds and posts SID notification payloads', async () => {
+  assert.deepEqual(buildRequestBody('A new item appeared.', {
+    endpointFormat: 'sid',
+    sidTitle: 'Wishlist changed',
+    sidSource: 'wishlist-monitor'
+  }), {
+    title: 'Wishlist changed',
+    body: 'A new item appeared.',
+    source: 'wishlist-monitor'
+  });
+
+  let payload;
+  const reporter = createMessageReporter({
+    endpointUrl: 'https://sid.example.test/api/notifications',
+    endpointFormat: 'sid',
+    sidTitle: 'Amazon Wish List Update',
+    sidSource: 'amazon-wishlist-monitor',
+    fetchImpl: async (_, options) => {
+      payload = JSON.parse(options.body);
+      return { ok: true, status: 201 };
+    }
+  });
+  await reporter('A new item appeared.');
+  assert.deepEqual(payload, {
+    title: 'Amazon Wish List Update',
+    body: 'A new item appeared.',
+    source: 'amazon-wishlist-monitor'
+  });
 });
 
 test('omits authorization when no token is configured', async () => {

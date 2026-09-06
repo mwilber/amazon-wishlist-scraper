@@ -32,6 +32,17 @@ Edit `.env` and set at minimum:
 MESSAGE_ENDPOINT_URL=https://example.com/message-endpoint
 ```
 
+The default `MESSAGE_ENDPOINT_FORMAT=message` sends the generic payload described below.
+For a SID installation, configure:
+
+```dotenv
+MESSAGE_ENDPOINT_URL=https://sid.example.com/api/notifications
+MESSAGE_ENDPOINT_TOKEN=your-sid-api-token
+MESSAGE_ENDPOINT_FORMAT=sid
+SID_NOTIFICATION_TITLE=Amazon Wish List Update
+SID_NOTIFICATION_SOURCE=amazon-wishlist-monitor
+```
+
 Relative paths in `.env` are resolved from this project directory. `MESSAGE_ENDPOINT_TOKEN`
 is optional. If provided, it is sent as a bearer token and is never written to logs.
 The default scan is headless; `SCAN_TIMEOUT_MS`, `MESSAGE_TIMEOUT_MS`,
@@ -90,14 +101,27 @@ npm test
 
 ## HTTP message contract
 
-Each request is an HTTP `POST` with `Content-Type: application/json` and exactly one
-required body property:
+Each request is an HTTP `POST` with `Content-Type: application/json`. The default
+`message` format has exactly one required body property:
 
 ```json
 {
   "message": "Two new items were added to Niece's Wish List: Building Set and Space Atlas."
 }
 ```
+
+The `sid` format adapts the same generated message to SID's notification API:
+
+```json
+{
+  "title": "Amazon Wish List Update",
+  "body": "Two new items were added to Niece's Wish List: Building Set and Space Atlas.",
+  "source": "amazon-wishlist-monitor"
+}
+```
+
+`SID_NOTIFICATION_TITLE` and `SID_NOTIFICATION_SOURCE` configure the fixed title and
+source token. The wish-list change message is placed in SID's `body` property.
 
 With `MESSAGE_ENDPOINT_TOKEN=example-token`, the request also includes:
 
@@ -126,6 +150,16 @@ curl -X POST \
 ```
 
 Omit the `Authorization` header if the receiver does not require it.
+
+For SID, use its `/api/notifications` contract:
+
+```bash
+curl -X POST \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer example-token" \
+  -d '{"title":"Amazon Wish List Update","body":"Test message from the Amazon wish-list monitor.","source":"amazon-wishlist-monitor"}' \
+  https://sid.example.com/api/notifications
+```
 
 ## Delivery and retry behavior
 

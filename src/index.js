@@ -4,6 +4,18 @@ import { scanWishlistPage } from './scan-list.js';
 import { saveDiagnostics } from './diagnostics.js';
 import { errorDetails } from './errors.js';
 
+function reporterOptions(config, fetchImpl) {
+  return {
+    endpointUrl: config.endpointUrl,
+    token: config.endpointToken,
+    timeoutMs: config.messageTimeoutMs,
+    endpointFormat: config.endpointFormat,
+    sidTitle: config.sidNotificationTitle,
+    sidSource: config.sidNotificationSource,
+    fetchImpl
+  };
+}
+
 async function deliver({ database, outboundMessage, reporter, config, logger, retry = false }) {
   const eventDetails = {
     messageId: outboundMessage.id,
@@ -35,12 +47,7 @@ async function deliver({ database, outboundMessage, reporter, config, logger, re
 export async function retryPendingMessages({ database, config, logger, includeFailed = false, ignoreSchedule = false, fetchImpl }) {
   const messages = database.getRetryableMessages({ includeFailed, ignoreSchedule });
   if (messages.length === 0) return { attempted: 0, failed: 0 };
-  const reporter = createMessageReporter({
-    endpointUrl: config.endpointUrl,
-    token: config.endpointToken,
-    timeoutMs: config.messageTimeoutMs,
-    fetchImpl
-  });
+  const reporter = createMessageReporter(reporterOptions(config, fetchImpl));
   let failed = 0;
   for (const message of messages) {
     const sent = await deliver({ database, outboundMessage: message, reporter, config, logger, retry: true });
@@ -58,12 +65,7 @@ export async function runMonitor({ database, config, logger, headed = false, fet
   let context;
   try {
     context = await launchBrowserImpl(config, { headed });
-    const reporter = createMessageReporter({
-      endpointUrl: config.endpointUrl,
-      token: config.endpointToken,
-      timeoutMs: config.messageTimeoutMs,
-      fetchImpl
-    });
+    const reporter = createMessageReporter(reporterOptions(config, fetchImpl));
 
     for (const list of config.lists) {
       const startedAt = new Date().toISOString();

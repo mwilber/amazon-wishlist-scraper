@@ -24,7 +24,47 @@ test('loads paths, settings, and enabled Amazon lists', () => {
   });
   assert.deepEqual(config.lists.map((list) => list.id), ['family']);
   assert.equal(config.headless, false);
+  assert.equal(config.endpointFormat, 'message');
   assert.equal(config.databasePath, join(rootDir, 'data/wishlist-monitor.sqlite'));
+});
+
+test('loads and validates SID notification settings', () => {
+  const rootDir = projectWithLists([
+    { id: 'family', name: 'Family', url: 'https://www.amazon.com/hz/wishlist/ls/ABC' }
+  ]);
+  const config = loadConfig({
+    rootDir,
+    env: {
+      MESSAGE_ENDPOINT_URL: 'https://sid.example.test/api/notifications',
+      MESSAGE_ENDPOINT_FORMAT: 'sid',
+      SID_NOTIFICATION_TITLE: 'Wish list changed',
+      SID_NOTIFICATION_SOURCE: 'wishlist-monitor'
+    }
+  });
+  assert.equal(config.endpointFormat, 'sid');
+  assert.equal(config.sidNotificationTitle, 'Wish list changed');
+  assert.equal(config.sidNotificationSource, 'wishlist-monitor');
+});
+
+test('rejects invalid endpoint formats and SID sources', () => {
+  const rootDir = projectWithLists([
+    { id: 'family', name: 'Family', url: 'https://www.amazon.com/hz/wishlist/ls/ABC' }
+  ]);
+  assert.throws(() => loadConfig({
+    rootDir,
+    env: {
+      MESSAGE_ENDPOINT_URL: 'https://example.test/messages',
+      MESSAGE_ENDPOINT_FORMAT: 'unknown'
+    }
+  }), /MESSAGE_ENDPOINT_FORMAT/);
+  assert.throws(() => loadConfig({
+    rootDir,
+    env: {
+      MESSAGE_ENDPOINT_URL: 'https://example.test/messages',
+      MESSAGE_ENDPOINT_FORMAT: 'sid',
+      SID_NOTIFICATION_SOURCE: 'contains spaces'
+    }
+  }), /SID_NOTIFICATION_SOURCE/);
 });
 
 test('rejects non-Amazon list URLs', () => {

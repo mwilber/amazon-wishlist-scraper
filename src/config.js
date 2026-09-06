@@ -40,6 +40,30 @@ function booleanValue(value, fallback, name) {
   throw new ConfigurationError(`${name} must be true or false`);
 }
 
+function choiceValue(value, fallback, name, choices) {
+  const selected = String(value || fallback).toLowerCase();
+  if (!choices.includes(selected)) {
+    throw new ConfigurationError(`${name} must be one of: ${choices.join(', ')}`);
+  }
+  return selected;
+}
+
+function sidTitle(value) {
+  const title = value || 'Amazon Wish List Update';
+  if (typeof title !== 'string' || !title.trim() || title.length > 120 || /[\r\n]/.test(title)) {
+    throw new ConfigurationError('SID_NOTIFICATION_TITLE must be 1-120 characters with no line breaks');
+  }
+  return title.trim();
+}
+
+function sidSource(value) {
+  const source = value || 'amazon-wishlist-monitor';
+  if (!/^[A-Za-z0-9._-]{1,64}$/.test(source)) {
+    throw new ConfigurationError('SID_NOTIFICATION_SOURCE must be an ASCII token of 1-64 characters');
+  }
+  return source;
+}
+
 function endpointUrl(value, required) {
   if (!value) {
     if (required) throw new ConfigurationError('MESSAGE_ENDPOINT_URL is required');
@@ -134,6 +158,14 @@ export function loadConfig({ rootDir = process.cwd(), requireLists = true, requi
     logPath: pathFrom(rootDir, values.LOG_PATH, 'logs/wishlist-monitor.log'),
     endpointUrl: endpointUrl(values.MESSAGE_ENDPOINT_URL, requireEndpoint),
     endpointToken: values.MESSAGE_ENDPOINT_TOKEN || null,
+    endpointFormat: choiceValue(
+      values.MESSAGE_ENDPOINT_FORMAT,
+      'message',
+      'MESSAGE_ENDPOINT_FORMAT',
+      ['message', 'sid']
+    ),
+    sidNotificationTitle: sidTitle(values.SID_NOTIFICATION_TITLE),
+    sidNotificationSource: sidSource(values.SID_NOTIFICATION_SOURCE),
     headless: booleanValue(values.HEADLESS, true, 'HEADLESS'),
     scanTimeoutMs: positiveInteger(values.SCAN_TIMEOUT_MS, 45_000, 'SCAN_TIMEOUT_MS', 1_000),
     messageTimeoutMs: positiveInteger(values.MESSAGE_TIMEOUT_MS, 10_000, 'MESSAGE_TIMEOUT_MS', 100),
