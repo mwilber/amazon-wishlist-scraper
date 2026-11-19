@@ -1,4 +1,9 @@
 import * as cheerio from 'cheerio';
+import {
+  WISHLIST_CONTAINERS,
+  WISHLIST_CONTAINER_SELECTOR,
+  WISHLIST_ROW_SELECTOR
+} from './wishlist-selectors.js';
 
 const ASIN_PATTERN = /^[A-Z0-9]{10}$/i;
 const WISHLIST_ITEM_ID_PATTERN = /^[A-Z0-9]{6,64}$/i;
@@ -71,12 +76,7 @@ function urlFromElement($, element, asin, baseUrl) {
 export function parseWishlistHtml(html, { baseUrl = 'https://www.amazon.com/' } = {}) {
   const $ = cheerio.load(html);
   const candidates = new Set();
-  const selectors = [
-    '#g-items > li[data-itemid]',
-    '#g-items .g-item-sortable',
-    '#g-items [data-asin]'
-  ];
-  $(selectors.join(',')).each((_, element) => candidates.add(element));
+  $(WISHLIST_ROW_SELECTOR).each((_, element) => candidates.add(element));
 
   const items = new Map();
   for (const element of candidates) {
@@ -110,37 +110,38 @@ export function parseWishlistHtml(html, { baseUrl = 'https://www.amazon.com/' } 
 
 export function hasWishlistStructure(html) {
   const $ = cheerio.load(html);
-  return $('#g-items, #wishlist-page, #no-items-section, .wl-list-empty, #profile-list-name').length > 0;
+  return $(`${WISHLIST_CONTAINER_SELECTOR}, #wishlist-page, #no-items-section, .wl-list-empty, #profile-list-name`).length > 0;
 }
 
 export function hasExplicitEmptyState(html) {
   const $ = cheerio.load(html);
   if ($('#no-items-section, .wl-list-empty, [data-testid="empty-list"]').length > 0) return true;
-  const listText = cleanText($('#wishlist-page, #g-items').text()) || '';
+  const listText = cleanText($(`#wishlist-page, ${WISHLIST_CONTAINER_SELECTOR}`).text()) || '';
   return /(?:there are no items|this list is empty|no items in this list)/i.test(listText);
 }
 
 export function inspectWishlistHtml(html, options = {}) {
   const $ = cheerio.load(html);
   const selectorCounts = Object.fromEntries([
-    '#g-items',
-    '#g-items > li',
-    '#g-items li[data-itemid]',
-    '#g-items .g-item-sortable',
-    '#g-items [data-asin]',
+    ...WISHLIST_CONTAINERS.flatMap((container) => [
+      container,
+      `${container} > li`,
+      `${container} li[data-itemid]`,
+      `${container} .g-item-sortable`,
+      `${container} [data-asin]`
+    ]),
     '#no-items-section',
     '#endOfListMarker',
     'a[href*="/dp/"]'
   ].map((selector) => [selector, $(selector).length]));
-  const candidateRowCount = $(
-    '#g-items > li[data-itemid], #g-items .g-item-sortable, #g-items [data-asin]'
-  ).length;
+  const candidateRowCount = $(WISHLIST_ROW_SELECTOR).length;
   const items = parseWishlistHtml(html, options);
   return {
     items,
     itemCount: items.length,
     explicitEmpty: hasExplicitEmptyState(html),
     recognizedStructure: hasWishlistStructure(html),
+    containerCount: $(WISHLIST_CONTAINER_SELECTOR).length,
     candidateRowCount,
     selectorCounts
   };
