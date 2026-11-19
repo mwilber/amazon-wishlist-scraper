@@ -92,6 +92,32 @@ test('baseline, grouping, and duplicate prevention work through the monitor', as
   assert.equal(requests.length, 1, 'unchanged products must not send another request');
 });
 
+test('switching between list and grid layouts preserves products without new-item notifications', async (t) => {
+  const { database, config, logger } = setup();
+  t.after(() => database.close());
+  let html = fixture;
+  const requests = [];
+  const options = {
+    database, config, logger,
+    launchBrowserImpl: fakeBrowser(() => html),
+    fetchImpl: async (_, options) => {
+      requests.push(JSON.parse(options.body));
+      return { ok: true, status: 200 };
+    }
+  };
+  await runMonitor(options);
+  const originalProducts = database.db.prepare('SELECT * FROM products ORDER BY asin').all();
+  for (const layout of ['g-items-grid', 'g-items']) {
+    html = fixture.replace('id="g-items"', `id="${layout}"`);
+    assert.deepEqual(await runMonitor(options), { scanFailures: 0, deliveryFailures: 0 });
+    const products = database.db.prepare('SELECT * FROM products ORDER BY asin').all();
+    assert.deepEqual(products.map(({ last_seen_at, ...product }) => product),
+      originalProducts.map(({ last_seen_at, ...product }) => product));
+  }
+  assert.equal(requests.length, 0);
+  assert.equal(database.getStatus().outstanding.length, 0);
+});
+
 test('failed delivery leaves the successful scan and retryable message intact', async (t) => {
   const { database, config, logger } = setup();
   t.after(() => database.close());

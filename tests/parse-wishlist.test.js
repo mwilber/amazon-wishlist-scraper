@@ -12,6 +12,43 @@ import {
 
 const fixtureUrl = new URL('./fixtures/wishlist.html', import.meta.url);
 const fixture = readFileSync(fileURLToPath(fixtureUrl), 'utf8');
+const gridFixture = readFileSync(new URL('./fixtures/wishlist-grid.html', import.meta.url), 'utf8');
+
+test('parses grid product titles and stable identities while ignoring recommendations', () => {
+  const inspection = inspectWishlistHtml(gridFixture);
+  assert.equal(inspection.containerCount, 1);
+  assert.equal(inspection.selectorCounts['#g-items'], 0);
+  assert.equal(inspection.selectorCounts['#g-items-grid'], 1);
+  assert.equal(inspection.candidateRowCount, 3);
+  assert.deepEqual(inspection.items, [
+    {
+      asin: 'B0AAA11111',
+      title: 'Wooden Marble Run',
+      url: 'https://www.amazon.com/dp/B0AAA11111',
+      wishlistItemId: 'IEXAMPLE000001',
+      identifierType: 'asin'
+    },
+    {
+      asin: 'B0BBB22222',
+      title: 'Illustrated Space Atlas',
+      url: 'https://www.amazon.com/dp/B0BBB22222',
+      wishlistItemId: 'IEXAMPLE000002',
+      identifierType: 'asin'
+    },
+    {
+      asin: 'WISHLIST_ITEM:IMANUAL000001',
+      title: 'A handmade gift',
+      url: null,
+      wishlistItemId: 'IMANUAL000001',
+      identifierType: 'wishlist_item'
+    }
+  ]);
+});
+
+test('recognizes grid containers and grid-only explicit empty states', () => {
+  assert.equal(hasWishlistStructure('<ul id="g-items-grid"></ul>'), true);
+  assert.equal(hasExplicitEmptyState('<ul id="g-items-grid"><li>This list is empty</li></ul>'), true);
+});
 
 test('extracts stable ASINs, titles, and canonical product URLs', () => {
   const items = parseWishlistHtml(fixture, { baseUrl: 'https://www.amazon.com/hz/wishlist/ls/example' });

@@ -110,7 +110,8 @@ sqlite3 data/wishlist-monitor.sqlite \
   "SELECT id,list_id,status,attempt_count,next_attempt_at,last_error FROM outbound_messages ORDER BY id;"
 ```
 
-Run all automated tests (they mock both Amazon pages and the message endpoint):
+Run all automated tests (they mock both Amazon pages and the message endpoint, including
+local Chromium checks for list/grid parsing and pagination):
 
 ```bash
 npm test
@@ -215,14 +216,22 @@ The error category and reason are included in the body. If delivery fails, that 
 message remains pending and follows the normal retry/backoff policy.
 
 Scraper health is validated as a page contract. A populated list must have exactly one
-`#g-items` container, Amazon's `#endOfListMarker`, and a one-to-one match between scoped
-wish-list rows and unique parsed item identities. Ordinary products use their ASIN. Manual
+list-view (`#g-items`) or grid-view (`#g-items-grid`) container, a one-to-one match between
+scoped wish-list rows and unique parsed item identities, and either Amazon's
+`#endOfListMarker` or its confirmed `allItemsLoaded`
+pagination state. Ordinary products use their ASIN. Manual
 entries and unavailable/removed products without an ASIN link use Amazon's stable wishlist
 row ID and visible label; the label is also used in notifications. Row IDs are retained for
 ordinary products so the same entry does not appear new if its ASIN link later disappears.
 A valid empty list must have an explicit empty-list marker and no item rows. Contradictory
 markers, partial results, missing containers, or unparseable rows fail closed and preserve
 the previous product state.
+
+Pagination requests are serialized: the monitor requests each pagination cursor only
+once, waits for outstanding item requests, and avoids triggering both scrolling and an
+explicit load event for the same page. Request tracking begins before navigation so
+Amazon's automatic initial pagination is included. A stalled page still fails the completeness
+checks; duplicate rows are not silently accepted.
 
 One list failure does not stop remaining lists. Browser startup failures create one
 failure record and notification for every list that could not be scanned. Unexpected
